@@ -44,12 +44,12 @@ const SmartBankrollLabel = (props: any) => {
       x={x} 
       y={y} 
       dy={dy} 
-      fill={isProfitable ? "#4ade80" : "#f87171"} 
+      fill={isProfitable ? "#39ff14" : "#ff073a"} 
       fontSize={10} 
       fontFamily="monospace"
       textAnchor="middle" 
-      fontWeight="bold"
-      style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.8))' }}
+      fontWeight="900"
+      style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}
     >
       ${value}
     </text>
@@ -86,12 +86,12 @@ const CustomTooltip = ({ active, payload, label, startBankroll }: any) => {
     const isProfitable = data.bankroll >= startBankroll;
     
     // Dynamic border color based on profitability
-    const borderColor = isProfitable ? 'border-green-500 shadow-green-900/20' : 'border-red-500 shadow-red-900/20';
+    const borderColor = isProfitable ? 'border-green-400 shadow-[0_0_15px_#4ade80]' : 'border-red-500 shadow-[0_0_15px_#ef4444]';
 
     return (
-      <div className={`bg-gray-900 border-2 ${borderColor} p-3 rounded-lg shadow-2xl backdrop-blur-sm z-50`}>
+      <div className={`bg-gray-900/95 border-2 ${borderColor} p-3 rounded-lg backdrop-blur-md z-50`}>
         <p className="font-bold text-yellow-400 mb-1 font-mono">Spin #{label}</p>
-        <div className="flex flex-col gap-1 text-xs">
+        <div className="flex flex-col gap-1 text-xs text-white">
             <div className="flex justify-between gap-4">
                 <span className="text-gray-400">Result:</span>
                 <span className={`${
@@ -128,17 +128,14 @@ const SimulationChart: React.FC<SimulationChartProps> = ({ data, startBankroll, 
   const minVal = Math.min(startBankroll, ...bankrolls);
   const maxVal = Math.max(startBankroll, ...bankrolls);
   
-  // 2. Add Padding (Exact Floats - No Floor/Ceil to prevent rounding errors on offset)
+  // 2. Add Padding (Exact Floats)
   const padding = (maxVal - minVal) * 0.05;
-  // If min == max (flat line at start), default to +/- 100
   const effectivePadding = padding === 0 ? 100 : padding;
   
   const domainMin = minVal - effectivePadding;
   const domainMax = maxVal + effectivePadding;
 
   // 3. Calculate Gradient Offset
-  // Formula: (Max - Start) / (Max - Min)
-  // Maps StartBankroll to a 0-1 percentage relative to the domain top (0) and bottom (1)
   const gradientOffset = () => {
     if (domainMax <= domainMin) return 0;
     if (startBankroll >= domainMax) return 0; // All Loss (Red)
@@ -155,24 +152,37 @@ const SimulationChart: React.FC<SimulationChartProps> = ({ data, startBankroll, 
         margin={{ top: 20, right: 30, left: 20, bottom: 10 }}
       >
         <defs>
+          {/* NEON GLOW FILTER */}
+          <filter id="shadow-glow" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
+            <feOffset in="blur" dx="0" dy="0" result="offsetBlur" />
+            <feFlood floodColor="white" floodOpacity="0.4" result="offsetColor"/>
+            <feComposite in="offsetColor" in2="offsetBlur" operator="in" result="offsetBlur"/>
+            <feMerge>
+              <feMergeNode in="offsetBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+
+          {/* FILL GRADIENT: Fade to Transparent at Bankroll Line - VIBRANT */}
           <linearGradient id="splitColorFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4ade80" stopOpacity={0.9} />
-            <stop offset={`${off * 100}%`} stopColor="#4ade80" stopOpacity={0.1} />
-            <stop offset={`${off * 100}%`} stopColor="#ef4444" stopOpacity={0.1} />
-            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.95} />
+            <stop offset="0%" stopColor="#39ff14" stopOpacity={0.85} />
+            <stop offset={`${off * 100}%`} stopColor="#39ff14" stopOpacity={0} />
+            <stop offset={`${off * 100}%`} stopColor="#ff073a" stopOpacity={0} />
+            <stop offset="100%" stopColor="#ff073a" stopOpacity={0.85} />
           </linearGradient>
 
+          {/* STROKE GRADIENT: Smooth Neon Green -> Gray -> Neon Red */}
           <linearGradient id="splitColorStroke" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4ade80" />
-            <stop offset={`${off * 100}%`} stopColor="#4ade80" />
-            <stop offset={`${off * 100}%`} stopColor="#ef4444" />
-            <stop offset="100%" stopColor="#ef4444" />
+            <stop offset="0%" stopColor="#39ff14" stopOpacity={1} />
+            <stop offset={`${off * 100}%`} stopColor="#9ca3af" stopOpacity={1} />
+            <stop offset="100%" stopColor="#ff073a" stopOpacity={1} />
           </linearGradient>
         </defs>
         
         <CartesianGrid 
-            stroke="#334155" 
-            strokeOpacity={0.4} 
+            stroke="#475569" 
+            strokeOpacity={0.5} 
             vertical={true} 
             horizontal={true}
         />
@@ -182,17 +192,16 @@ const SimulationChart: React.FC<SimulationChartProps> = ({ data, startBankroll, 
           type="number"
           domain={[0, 'dataMax']} 
           interval={0} // Force tick for every step
-          minTickGap={2} // Prevent overlap if too tight
-          stroke="#666" 
-          tick={{ fill: '#fbbf24', fontSize: 10, fontFamily: 'monospace' }} 
+          stroke="#94a3b8" 
+          tick={{ fill: '#fbbf24', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' }} 
           tickLine={false}
           axisLine={false}
         />
         
         <YAxis 
           domain={[domainMin, domainMax]} 
-          allowDecimals={false} // Hide decimals on axis labels for cleaner look, even if domain is float
-          stroke="#666" 
+          allowDecimals={false}
+          stroke="#94a3b8" 
           tick={<CustomYAxisTick startBankroll={startBankroll} />}
           tickLine={false}
           axisLine={false}
@@ -209,14 +218,14 @@ const SimulationChart: React.FC<SimulationChartProps> = ({ data, startBankroll, 
             stroke="#ffffff" 
             strokeWidth={2} 
             strokeDasharray="6 4" 
-            opacity={0.9} 
+            opacity={1} 
             label={{ 
                 value: 'START', 
                 position: 'insideRight', 
                 fill: '#fff', 
                 fontSize: 10, 
-                fontWeight: 'bold', 
-                opacity: 0.7 
+                fontWeight: '900', 
+                opacity: 0.9 
             }}
         />
         
@@ -224,11 +233,12 @@ const SimulationChart: React.FC<SimulationChartProps> = ({ data, startBankroll, 
           type="linear"
           dataKey="bankroll"
           stroke="url(#splitColorStroke)"
-          strokeWidth={3}
+          strokeWidth={4}
           fill="url(#splitColorFill)"
           baseValue={startBankroll}
-          activeDot={{ r: 6, fill: '#fff', strokeWidth: 0 }}
+          activeDot={{ r: 6, fill: '#fff', strokeWidth: 0, filter: 'url(#shadow-glow)' }}
           animationDuration={0}
+          filter="url(#shadow-glow)"
         >
             <LabelList 
                 dataKey="bankroll" 

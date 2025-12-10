@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { StrategyNode, ProgressionType, PlacedBet, BetType, MartingaleLimitType, RepeatUntilType } from '../types';
 import { NUMBER_COLORS, PAYOUTS } from '../constants';
@@ -612,56 +613,6 @@ const StrategyFlowBuilder: React.FC<StrategyFlowBuilderProps> = ({
     // Modified: Accept optional argument to satisfy any implicit 1-arg expectation
     const forceUpdate = (_?: any) => setTick(t => t + 1);
 
-    // --- PARTICLE SYSTEM FOR BINARY TRAIL ---
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const particlesRef = useRef<{x: number, y: number, char: string, opacity: number}[]>([]);
-    const animFrameRef = useRef<number>();
-
-    // Modified: Accept optional timestamp to satisfy requestAnimationFrame callback signature
-    const renderParticles = (_timestamp?: number) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const particles = particlesRef.current;
-        
-        if (particles.length === 0) return;
-
-        for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i];
-            
-            // Stationary trail logic: No movement, just fade
-            p.opacity -= 0.015;
-            
-            if (p.opacity <= 0) {
-                particles.splice(i, 1);
-            } else {
-                ctx.fillStyle = `rgba(251, 191, 36, ${p.opacity})`; // Yellow-400 with fade
-                ctx.font = '900 16px monospace'; // Large and Bold
-                ctx.fillText(p.char, p.x, p.y);
-            }
-        }
-        
-        if (particles.length > 0) {
-            animFrameRef.current = requestAnimationFrame(renderParticles);
-        }
-    };
-
-    useEffect(() => {
-        // Handle window resize for canvas
-        const handleResize = () => {
-            if (canvasRef.current) {
-                canvasRef.current.width = window.innerWidth;
-                canvasRef.current.height = window.innerHeight;
-            }
-        };
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     useEffect(() => {
         const nodes: RenderNode[] = [];
         const conns: RenderConnection[] = [];
@@ -890,22 +841,6 @@ const StrategyFlowBuilder: React.FC<StrategyFlowBuilderProps> = ({
         const velocity = Math.sqrt(e.movementX ** 2 + e.movementY ** 2);
         shakeIntensity.current = Math.min(velocity * 1.5, 25); 
 
-        // Spawn Particles for Trail
-        // Calculate the screen position of the dragged element (approx)
-        // Since we are dragging, the cursor position e.clientX/Y is where the action is.
-        // We'll spawn particles near the cursor.
-        if (Math.random() > 0.3) { // Density control
-             particlesRef.current.push({
-                x: e.clientX + (Math.random() - 0.5) * 30, // Wider jitter for trail thickness
-                y: e.clientY + (Math.random() - 0.5) * 30,
-                char: Math.random() > 0.5 ? '1' : '0',
-                opacity: 1,
-             });
-             if (particlesRef.current.length === 1) {
-                 renderParticles();
-             }
-        }
-
         const isVirtualDrag = dragNodeId.current.startsWith('v-');
         
         if (isVirtualDrag) {
@@ -927,91 +862,102 @@ const StrategyFlowBuilder: React.FC<StrategyFlowBuilderProps> = ({
         isDragging.current = false;
         dragNodeId.current = null;
         shakeIntensity.current = 0;
-        forceUpdate();
+        forceUpdate(0);
         document.removeEventListener('mousemove', handleNodeMouseMove);
         document.removeEventListener('mouseup', handleNodeMouseUp);
     };
 
     return (
-        <>
-            {/* Visual Effect Overlay */}
-            <canvas 
-                ref={canvasRef} 
-                className="absolute inset-0 pointer-events-none z-[999]" 
-                style={{ width: '100%', height: '100%' }}
-            />
-            
-            <div 
-                className="w-full h-full relative pointer-events-none" 
-                style={{ 
-                    transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${zoom})`,
-                    transformOrigin: '0 0'
-                }}
-            >
-                <svg className="absolute top-[-5000px] left-[-5000px] w-[10000px] h-[10000px] pointer-events-none z-0 overflow-visible">
-                    <defs>
-                        <filter id="glow-green"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                        <filter id="glow-red"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                    </defs>
-                    {connList.map(conn => {
-                        const sx = conn.startX + 120 + 5000;
-                        const sy = conn.startY + 40 + 5000;
-                        const ex = conn.endX - 120 + 5000;
-                        const ey = conn.endY + 40 + 5000;
-                        const midX = (sx + ex) / 2;
-                        
-                        const isActiveShake = isDragging.current && (conn.sourceId === dragNodeId.current || conn.targetId === dragNodeId.current);
-                        
-                        let cp1x = midX;
-                        let cp1y = sy;
-                        let cp2x = midX;
-                        let cp2y = ey;
+        <div 
+            className="w-full h-full relative pointer-events-none" 
+            style={{ 
+                transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${zoom})`,
+                transformOrigin: '0 0'
+            }}
+        >
+            <svg className="absolute top-[-5000px] left-[-5000px] w-[10000px] h-[10000px] pointer-events-none z-0 overflow-visible">
+                <defs>
+                    <filter id="glow-green"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                    <filter id="glow-red"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                {connList.map(conn => {
+                    const sx = conn.startX + 120 + 5000;
+                    const sy = conn.startY + 40 + 5000;
+                    const ex = conn.endX - 120 + 5000;
+                    const ey = conn.endY + 40 + 5000;
+                    const midX = (sx + ex) / 2;
+                    
+                    const isActiveShake = isDragging.current && (conn.sourceId === dragNodeId.current || conn.targetId === dragNodeId.current);
+                    
+                    let cp1x = midX;
+                    let cp1y = sy;
+                    let cp2x = midX;
+                    let cp2y = ey;
 
-                        if (isActiveShake) {
-                            const jitter = shakeIntensity.current;
-                            cp1x += (Math.random() - 0.5) * jitter;
-                            cp1y += (Math.random() - 0.5) * jitter;
-                            cp2x += (Math.random() - 0.5) * jitter;
-                            cp2y += (Math.random() - 0.5) * jitter;
-                        }
+                    if (isActiveShake) {
+                        const jitter = shakeIntensity.current;
+                        cp1x += (Math.random() - 0.5) * jitter;
+                        cp1y += (Math.random() - 0.5) * jitter;
+                        cp2x += (Math.random() - 0.5) * jitter;
+                        cp2y += (Math.random() - 0.5) * jitter;
+                    }
 
-                        const pathD = `M ${sx} ${sy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${ex} ${ey}`;
-                        
-                        const color = conn.type === 'win' ? '#4ade80' : '#f87171';
-                        const glow = conn.type === 'win' ? 'url(#glow-green)' : 'url(#glow-red)';
-                        
-                        const effectiveIsTerminal = isStrategyComplete ? true : conn.isTerminal;
-                        const effectiveIsComplete = isStrategyComplete ? true : conn.isComplete;
-                        
-                        const opacity = effectiveIsTerminal ? 0.3 : 0.8;
-                        const stopAnim = isStrategyComplete;
+                    const pathD = `M ${sx} ${sy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${ex} ${ey}`;
+                    
+                    const color = conn.type === 'win' ? '#4ade80' : '#f87171';
+                    const glow = conn.type === 'win' ? 'url(#glow-green)' : 'url(#glow-red)';
+                    
+                    const effectiveIsTerminal = isStrategyComplete ? true : conn.isTerminal;
+                    const effectiveIsComplete = isStrategyComplete ? true : conn.isComplete;
+                    
+                    const opacity = effectiveIsTerminal ? 0.3 : 0.8;
+                    const stopAnim = isStrategyComplete;
 
-                        return (
-                            <g key={`${conn.id}-${effectiveIsTerminal ? 'term' : 'active'}`}>
-                                <path d={pathD} fill="none" stroke={color} strokeWidth="4" filter={glow} opacity={opacity} />
-                                {(!stopAnim && !effectiveIsTerminal && !effectiveIsComplete) && (
-                                    <path d={pathD} fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeDasharray="0 40">
-                                        <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1s" repeatCount="indefinite" />
-                                    </path>
-                                )}
-                            </g>
-                        );
-                    })}
-                </svg>
-                {nodeList.map(rn => (
-                    <NodeCard 
-                        key={`${rn.data.id}-${rn.data.type}-${rn.data.label}`}
-                        node={rn.data}
-                        renderData={rn}
-                        startBankroll={startBankroll}
-                        onUpdateNode={onUpdateNode}
-                        onCreateNode={onCreateNode}
-                        onOpenTable={onOpenTable}
-                        onStartDrag={handleNodeDragStart}
-                    />
-                ))}
-            </div>
-        </>
+                    return (
+                        <g key={`${conn.id}-${effectiveIsTerminal ? 'term' : 'active'}`}>
+                            <path id={`path-${conn.id}`} d={pathD} fill="none" stroke={color} strokeWidth="4" filter={glow} opacity={opacity} />
+                            {(!stopAnim && !effectiveIsTerminal && !effectiveIsComplete) && (
+                                <>
+                                    {Array.from({ length: 8 }).map((_, i) => (
+                                        <text
+                                            key={i}
+                                            dy={5}
+                                            fill="#ffffff"
+                                            fontSize="10"
+                                            fontWeight="900"
+                                            fontFamily="monospace"
+                                            style={{ textShadow: '0 0 3px rgba(255,255,255,0.9)' }}
+                                        >
+                                            {i % 2 === 0 ? '1' : '0'}
+                                            <animateMotion
+                                                dur="1.5s"
+                                                repeatCount="indefinite"
+                                                begin={`-${i * 0.25}s`}
+                                                calcMode="linear"
+                                            >
+                                                <mpath href={`#path-${conn.id}`} />
+                                            </animateMotion>
+                                        </text>
+                                    ))}
+                                </>
+                            )}
+                        </g>
+                    );
+                })}
+            </svg>
+            {nodeList.map(rn => (
+                <NodeCard 
+                    key={`${rn.data.id}-${rn.data.type}-${rn.data.label}`}
+                    node={rn.data}
+                    renderData={rn}
+                    startBankroll={startBankroll}
+                    onUpdateNode={onUpdateNode}
+                    onCreateNode={onCreateNode}
+                    onOpenTable={onOpenTable}
+                    onStartDrag={handleNodeDragStart}
+                />
+            ))}
+        </div>
     );
 };
 

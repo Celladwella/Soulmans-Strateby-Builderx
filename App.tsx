@@ -91,8 +91,8 @@ const BackgroundAudio = ({ url }: { url: string }) => {
 };
 
 const RecentSpinsDisplay = ({ steps }: { steps: SimulationStep[] }) => {
-    // Reverse to show newest first, take last 12
-    const recent = [...steps].reverse().slice(0, 12);
+    // Take last 12, keep chronological order (Oldest -> Newest)
+    const recent = steps.slice(-12);
   
     return (
       <div className="w-full h-24 bg-gray-900/90 border-b border-gray-700 flex items-center justify-center gap-3 overflow-hidden shrink-0 relative z-20 backdrop-blur-sm animate-fadeIn">
@@ -102,7 +102,8 @@ const RecentSpinsDisplay = ({ steps }: { steps: SimulationStep[] }) => {
           </div>
           
           {recent.map((step, i) => {
-               const isNewest = i === 0;
+               // Newest is on the RIGHT (last index)
+               const isNewest = i === recent.length - 1;
                const colorClass = step.result.color === 'red' ? 'bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 
                                   step.result.color === 'black' ? 'bg-gray-800 shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 
                                   'bg-green-600 shadow-[0_0_15px_rgba(22,163,74,0.4)]';
@@ -126,7 +127,16 @@ const RecentSpinsDisplay = ({ steps }: { steps: SimulationStep[] }) => {
     );
   };
 
-const BackgroundEffects = () => {
+const VolumetricRays = () => (
+    <div className="absolute top-[-20%] left-[-10%] w-[80%] h-[120%] pointer-events-none z-[5] overflow-hidden mix-blend-screen opacity-60">
+        <div className="absolute top-0 left-0 w-[150%] h-[20%] bg-gradient-to-r from-cyan-100/30 to-transparent blur-2xl transform -rotate-45 origin-top-left animate-ray-pulse" style={{ animationDelay: '0s' }} />
+        <div className="absolute top-[10%] left-0 w-[150%] h-[15%] bg-gradient-to-r from-blue-100/20 to-transparent blur-3xl transform -rotate-[40deg] origin-top-left animate-ray-pulse" style={{ animationDelay: '1.5s' }} />
+        <div className="absolute top-[20%] left-0 w-[150%] h-[25%] bg-gradient-to-r from-white/20 to-transparent blur-3xl transform -rotate-[35deg] origin-top-left animate-ray-pulse" style={{ animationDelay: '3s' }} />
+        <div className="absolute top-[30%] left-0 w-[150%] h-[10%] bg-gradient-to-r from-purple-100/20 to-transparent blur-2xl transform -rotate-[30deg] origin-top-left animate-ray-pulse" style={{ animationDelay: '0.5s' }} />
+    </div>
+);
+
+const BackgroundEffects = ({ glowTrigger }: { glowTrigger: number }) => {
   // Static Stars
   const stars = useMemo(() => Array.from({ length: 400 }).map((_, i) => ({
     left: `${Math.random() * 100}%`,
@@ -141,7 +151,27 @@ const BackgroundEffects = () => {
   
   // Classic UFO State
   const [ufoActive, setUfoActive] = useState(false);
-  const [ufoConfig, setUfoConfig] = useState<{ startY: number, endY: number } | null>(null);
+  const [ufoConfig, setUfoConfig] = useState<{ startY: number, endY: number, type: 'flyby' | 'return' } | null>(null);
+
+  // Glow State for Planet
+  const [isGlowing, setIsGlowing] = useState(false);
+  const [shockwaves, setShockwaves] = useState<number[]>([]);
+
+  useEffect(() => {
+      if (glowTrigger > 0) {
+          setIsGlowing(true);
+          const id = Date.now();
+          setShockwaves(prev => [...prev, id]);
+
+          // Clean up individual shockwave
+          setTimeout(() => {
+               setShockwaves(prev => prev.filter(s => s !== id));
+          }, 1500);
+
+          const t = setTimeout(() => setIsGlowing(false), 800); // 0.8s flash
+          return () => clearTimeout(t);
+      }
+  }, [glowTrigger]);
 
   // Shooting Star Logic
   useEffect(() => {
@@ -198,10 +228,13 @@ const BackgroundEffects = () => {
           const delay = 360000 + (Math.random() * 60000); 
           
           const timer = setTimeout(() => {
-              // Configure random trajectory
+              // Randomly decide if it's a standard flyby (left to right) or the casual return (right to left, receding)
+              const type = Math.random() > 0.5 ? 'flyby' : 'return';
+              
               setUfoConfig({
                   startY: 10 + Math.random() * 30, // Start high in background
-                  endY: 40 + Math.random() * 40    // End lower in foreground
+                  endY: 40 + Math.random() * 40,    // End lower in foreground
+                  type: type
               });
               setUfoActive(true);
 
@@ -209,7 +242,7 @@ const BackgroundEffects = () => {
               setTimeout(() => {
                   setUfoActive(false);
                   scheduleUfo(); // Schedule next
-              }, 22000); // Cleanup after animation
+              }, 25000); // Cleanup after animation
           }, delay);
           
           return timer;
@@ -288,6 +321,9 @@ const BackgroundEffects = () => {
       <div className="absolute inset-0 bg-[#020408]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,#000000_100%)] opacity-80" />
 
+      {/* Volumetric Light Rays */}
+      <VolumetricRays />
+
       {/* Static Stars with Twinkle */}
       {stars.map((s, i) => (
         <div
@@ -322,7 +358,7 @@ const BackgroundEffects = () => {
       {/* UFO Flyby */}
       {ufoActive && ufoConfig && (
           <div 
-            className="absolute z-20 animate-ufo-flyby"
+            className={`absolute z-20 ${ufoConfig.type === 'return' ? 'animate-ufo-return' : 'animate-ufo-flyby'}`}
             style={{
                 '--ufo-start-y': `${ufoConfig.startY}vh`,
                 '--ufo-end-y': `${ufoConfig.endY}vh`,
@@ -330,7 +366,21 @@ const BackgroundEffects = () => {
           >
               <div className="relative w-48 h-12">
                    {/* Glass Dome */}
-                   <div className="absolute top-[-15px] left-1/2 -translate-x-1/2 w-20 h-10 bg-cyan-200/40 rounded-t-full border border-white/30 backdrop-blur-[1px]" />
+                   <div className="absolute top-[-15px] left-1/2 -translate-x-1/2 w-20 h-10 bg-cyan-200/40 rounded-t-full border border-white/30 backdrop-blur-[1px] overflow-hidden">
+                       {/* THE ALIEN DRIVER */}
+                       <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-10 h-10 flex items-center justify-center animate-pulse" style={{ animationDuration: '3s' }}>
+                           {/* Head */}
+                           <div className="w-8 h-7 bg-[#4ade80] rounded-[50%_50%_40%_40%] shadow-[0_0_5px_#22c55e] relative">
+                               {/* Eyes */}
+                               <div className="absolute top-[30%] left-[15%] w-2 h-3 bg-black rounded-full -rotate-12 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.4)]" />
+                               <div className="absolute top-[30%] right-[15%] w-2 h-3 bg-black rounded-full rotate-12 shadow-[inset_-1px_1px_2px_rgba(255,255,255,0.4)]" />
+                               {/* Reflection on head */}
+                               <div className="absolute top-1 left-2 w-3 h-1 bg-white/40 rounded-full" />
+                           </div>
+                           {/* Shoulders */}
+                           <div className="absolute -bottom-2 w-10 h-4 bg-green-700 rounded-t-full -z-10" />
+                       </div>
+                   </div>
                    
                    {/* Metallic Body */}
                    <div className="absolute inset-0 bg-gradient-to-b from-gray-300 via-gray-400 to-gray-700 rounded-[50%] shadow-2xl border border-gray-500 overflow-hidden flex items-center">
@@ -364,10 +414,30 @@ const BackgroundEffects = () => {
       <div className="absolute top-[-10%] right-[-10%] w-[900px] h-[900px]" style={{ perspective: '1200px' }}>
          <div className="relative w-full h-full flex items-center justify-center" style={{ transformStyle: 'preserve-3d' }}>
              
+             {/* SHOCKWAVES (Radiating from behind) */}
+             {shockwaves.map(id => (
+                <div 
+                    key={id}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full border-[12px] border-cyan-200/80 shadow-[0_0_100px_#22d3ee] z-0 pointer-events-none animate-shockwave"
+                    style={{ transformStyle: 'preserve-3d', transform: 'translate(-50%, -50%) translateZ(-50px)' }}
+                />
+             ))}
+
              {/* The Mechanical Base (Planet) - Face Camera directly (no tilt) to look round */}
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full shadow-[0_0_100px_rgba(0,0,0,1)] bg-slate-900 overflow-hidden" 
+             <div 
+                  className={`
+                      absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full 
+                      overflow-hidden transition-all duration-300 ease-out
+                      ${isGlowing 
+                          ? 'shadow-[0_0_200px_rgba(34,211,238,0.95)] border-4 border-white scale-105 brightness-150' 
+                          : 'shadow-[0_0_100px_rgba(0,0,0,1)] border-0 border-transparent scale-100 brightness-100'}
+                      bg-slate-900
+                  `}
                   style={{ transform: 'translate(-50%, -50%) translateZ(0)' }}
              >
+                {/* Glow Overlay */}
+                <div className={`absolute inset-0 bg-white/40 transition-opacity duration-300 z-50 pointer-events-none mix-blend-screen ${isGlowing ? 'opacity-100' : 'opacity-0'}`} />
+
                 {/* Metallic Texture Base - Rotating */}
                 <div className="absolute inset-0 bg-[conic-gradient(from_45deg,#1e293b,#334155,#0f172a,#334155,#1e293b)] animate-[spin_120s_linear_infinite]" />
                 
@@ -531,6 +601,9 @@ function App() {
 
   // New: Transition state for resetting strategy
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Planet Glow State
+  const [planetGlowTrigger, setPlanetGlowTrigger] = useState(0);
 
   // --- RECURSIVE TREE STATE ---
   const [rootNode, setRootNode] = useState<StrategyNode>({
@@ -751,40 +824,113 @@ function App() {
       setZoom(0.8);
   };
 
-  const handleNewStrategy = () => {
-    const hasWork = rootNode.children.win || rootNode.children.loss || (rootNode.bets && rootNode.bets.length > 0);
-    if (hasWork) {
-        if (!window.confirm("Start a new strategy? Unsaved changes will be lost.")) {
-            return;
-        }
+  // --- STRATEGY COMPLETION LOGIC ---
+  const checkStrategyComplete = (root: StrategyNode): boolean => {
+      const visited = new Set<string>();
+      
+      const isBranchComplete = (node: StrategyNode): boolean => {
+          if (visited.has(node.id)) return true;
+          visited.add(node.id);
+
+          if (node.type === 'reset') return true;
+          if (!isNodeValid(node)) return false;
+
+          let winComplete = false;
+          if (node.children.win) {
+              if (node.children.win.id === root.id) winComplete = true; // Loop to root
+              else winComplete = isBranchComplete(node.children.win);
+          }
+
+          let lossComplete = false;
+          if (node.type === 'martingale' && node.martingaleLimitType === 'until_bankrupt') {
+              lossComplete = true;
+          } else {
+              if (node.children.loss) {
+                  if (node.children.loss.id === root.id) lossComplete = true; // Loop to root
+                  else lossComplete = isBranchComplete(node.children.loss);
+              }
+          }
+          
+          return winComplete && lossComplete;
+      };
+
+      return isBranchComplete(root);
+  };
+
+  // Track validity to trigger glow on completion
+  const [isStrategyComplete, setIsStrategyComplete] = useState(false);
+
+  useEffect(() => {
+     const complete = checkStrategyComplete(rootNode);
+     
+     // Trigger ONLY on transition from Incomplete -> Complete
+     if (complete && !isStrategyComplete) {
+         // Add a small delay to ensure visual updates (lines stopping) happen slightly before or concurrently
+         setTimeout(() => setPlanetGlowTrigger(prev => prev + 1), 100);
+     }
+     setIsStrategyComplete(complete);
+  }, [rootNode]);
+
+  const handleNewStrategy = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
     }
 
-    // Trigger Fade Out
+    // 1. Transition Out (Fade away)
     setIsTransitioning(true);
 
+    // 2. Perform Data Reset after fade out
     setTimeout(() => {
-        const newRoot: StrategyNode = {
-            id: 'root',
-            type: 'start_immediately',
-            label: 'Start Immediately',
-            bets: [],
-            x: 0,
-            y: 0,
-            children: { win: null, loss: null }
-        };
-        setRootNode(newRoot);
-        setStrategyName("New Strategy");
-        setCanvasOffset({ x: window.innerWidth / 3, y: window.innerHeight / 2 });
-        setZoom(1);
-        setEditingNodeId(null);
-        setResetKey(prev => prev + 1);
-        
-        // Trigger Fade In
-        setTimeout(() => {
-            setIsTransitioning(false);
-        }, 100);
+        try {
+            // --- HARD RESET LOGIC ---
+            // Create a completely fresh root object with a unique ID
+            const freshRoot: StrategyNode = {
+                id: `root-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                type: 'start_immediately',
+                label: 'Start Immediately',
+                bets: [],
+                x: 0,
+                y: 0,
+                children: { win: null, loss: null }
+            };
 
-    }, 300);
+            // Reset Configs
+            setStartBankroll(1000);
+            setTableMin(3);
+            setTableMax(1000);
+            setMaxSpins(50);
+            setNumSimulations(1);
+            setStopLoss(0);
+            setTakeProfit(2000);
+            setStrategyName("Strategy 1");
+            
+            // Reset View State
+            setEditingNodeId(null);
+            setCanvasOffset({ x: window.innerWidth * 0.15, y: window.innerHeight / 2 });
+            setZoom(1);
+            setAllSimResults([]);
+            setCurrentResultIndex(0);
+
+            // Apply New Root
+            setRootNode(freshRoot);
+            
+            // Crucial: Increment Reset Key to force full component remount (clears all internal node state)
+            setResetKey(prev => prev + 1);
+
+            // 3. Transition In (Reveal new state)
+            // Note: We removed the manual glow trigger here. 
+            // The useEffect above will handle it if/when the strategy becomes valid.
+            setTimeout(() => {
+                setIsTransitioning(false);
+            }, 50);
+
+        } catch (error) {
+            console.error("Error during strategy reset:", error);
+            // Fallback: recover view even if reset fails
+            setIsTransitioning(false);
+        }
+    }, 300); // Wait for fade out
   };
 
   // --- SAVE & LOAD STRATEGY ---
@@ -840,7 +986,8 @@ function App() {
               
               setCanvasOffset({ x: window.innerWidth / 3, y: window.innerHeight / 2 });
               setZoom(1);
-              setResetKey(prev => prev + 1);
+              setResetKey(prev => prev + 1); // Force remount
+              // Note: useEffect will detect validity change and trigger glow automatically
               
           } catch (err) {
               console.error(err);
@@ -852,36 +999,12 @@ function App() {
   };
 
   const handleGoToSimulation = () => {
-    let hasError = false;
-    const visited = new Set<string>();
-
-    const checkNodes = (node: StrategyNode) => {
-        if (visited.has(node.id)) return;
-        visited.add(node.id);
-
-        if (!isNodeValid(node)) {
-            hasError = true;
-        }
-        if (node.children.win) checkNodes(node.children.win);
-        if (node.children.loss) checkNodes(node.children.loss);
-    }
-    checkNodes(rootNode);
-
-    if (hasError) {
-        alert("Strategy Invalid: Some nodes need attention (flashing red). Please define bets or actions for all active nodes before running.");
-        return;
-    }
-
+    // Just Navigate. The actual run is triggered by "Run Simulation" in the sim view.
     setAllSimResults([]);
     setViewMode('simulation');
-    
-    // Manual Start: Initialize data but pause at step 0
-    setIsPlaying(false);
+    setIsPlaying(false); 
     setPlaybackIndex(0);
-    // Remove isLogFullScreen reset as state is removed
-    setExpandedSpinIndex(null); // Reset expanded view
-    
-    executeSimulationLogic();
+    setExpandedSpinIndex(null); 
   };
 
   const executeSimulationLogic = () => {
@@ -942,28 +1065,6 @@ function App() {
     link.click();
     document.body.removeChild(link);
   };
-
-  const isStrategyValid = useMemo(() => {
-    const visited = new Set<string>();
-    let isValid = true;
-    
-    const check = (node: StrategyNode) => {
-        if (!isValid) return; // Fail fast
-        if (visited.has(node.id)) return;
-        visited.add(node.id);
-
-        if (!isNodeValid(node)) {
-            isValid = false;
-            return;
-        }
-
-        if (node.children.win) check(node.children.win);
-        if (node.children.loss) check(node.children.loss);
-    };
-
-    check(rootNode);
-    return isValid;
-  }, [rootNode]);
 
   const currentSim = allSimResults[currentResultIndex];
   
@@ -1131,7 +1232,7 @@ function App() {
                 animation: orbitWobble 24s ease-in-out infinite;
             }
             
-            /* UFO Animation Keyframes */
+            /* UFO Animation Keyframes - Standard Flyby (Left to Right) */
             @keyframes ufoFlyBy {
                 0% {
                     transform: translate3d(50%, -20vh, -1000px) scale(0.05); /* Start small, deep background */
@@ -1148,16 +1249,55 @@ function App() {
                 }
             }
             .animate-ufo-flyby {
-                animation: ufoFlyBy 22s ease-in-out forwards;
+                animation: ufoFlyBy 25s ease-in-out forwards;
                 top: 0;
                 right: 0;
             }
+
+            /* UFO Animation Keyframes - Return Trip (Right to Left, Leaving) */
+            @keyframes ufoReturn {
+                0% {
+                    transform: translate3d(-10vw, 40vh, 100px) scale(1.5); /* Start Right (foreground) */
+                    opacity: 1;
+                    filter: blur(0);
+                }
+                100% {
+                     transform: translate3d(120vw, 20vh, -3000px) scale(0.1); /* End Left (deep background) */
+                     opacity: 0;
+                     filter: blur(3px);
+                }
+            }
+            .animate-ufo-return {
+                animation: ufoReturn 25s ease-in-out forwards;
+                top: 0;
+                right: 0;
+            }
+
             @keyframes ufoLightsSpin {
                 0% { transform: translateX(0); }
                 100% { transform: translateX(-50%); }
             }
             .animate-ufo-lights-spin {
                 animation: ufoLightsSpin 1s linear infinite;
+            }
+
+            /* Light Ray Animation */
+            @keyframes rayPulse {
+                0% { opacity: 0.3; transform: rotate(-45deg) translateX(0px); }
+                50% { opacity: 0.7; transform: rotate(-43deg) translateX(10px); }
+                100% { opacity: 0.3; transform: rotate(-45deg) translateX(0px); }
+            }
+            .animate-ray-pulse {
+                animation: rayPulse 6s ease-in-out infinite;
+            }
+
+            /* SHOCKWAVE ANIMATION */
+            @keyframes shockwave {
+                0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; border-width: 6px; }
+                100% { transform: translate(-50%, -50%) scale(3); opacity: 0; border-width: 0px; }
+            }
+            .animate-shockwave {
+                animation: shockwave 1.2s cubic-bezier(0, 0, 0.2, 1) forwards;
             }
         `;
         document.head.appendChild(style);
@@ -1166,119 +1306,130 @@ function App() {
 
   let simulationView = null;
   if (viewMode === 'simulation') {
-      if (currentSim && displayedStats) {
-        
-        // --- Render Function using New Component ---
-        simulationView = (
-            <div className="absolute top-16 left-0 right-0 bottom-0 z-[40] bg-black/85 backdrop-blur-sm flex flex-col animate-fadeIn border-t border-gray-800">
-                
-                {/* Header (Run Selector & Controls) */}
-                <div className="flex justify-between items-center px-6 py-4 border-b border-gray-800 bg-gray-900 shadow-md z-10 shrink-0">
-                    <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
-                            Simulation Analysis
-                        </h2>
-                        
-                        {/* Simulation Run Selector */}
-                        <div className="flex items-center gap-2">
-                             <button 
-                                disabled={currentResultIndex === 0}
-                                onClick={() => { setCurrentResultIndex(prev => Math.max(0, prev - 1)); setIsPlaying(true); }}
-                                className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                            >
-                                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                            </button>
-                            <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-white font-mono font-bold">
-                                Run {currentResultIndex + 1} / {allSimResults.length}
-                            </div>
-                            <button 
-                                disabled={currentResultIndex === allSimResults.length - 1}
-                                onClick={() => { setCurrentResultIndex(prev => Math.min(allSimResults.length - 1, prev + 1)); setIsPlaying(true); }}
-                                className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                            >
-                                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                            </button>
-                        </div>
+      // --- Render Function using New Component ---
+      simulationView = (
+          <div className="absolute top-16 left-0 right-0 bottom-0 z-[40] bg-black/85 backdrop-blur-sm flex flex-col animate-fadeIn border-t border-gray-800">
+              
+              {/* Header (Run Selector & Controls) */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-gray-800 bg-gray-900 shadow-md z-10 shrink-0">
+                  <div className="flex items-center gap-4">
+                      <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+                          Simulation Analysis
+                      </h2>
+                      
+                      {/* Simulation Run Selector */}
+                      <div className="flex items-center gap-2">
+                           <button 
+                              disabled={currentResultIndex === 0}
+                              onClick={() => { setCurrentResultIndex(prev => Math.max(0, prev - 1)); setIsPlaying(true); }}
+                              className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          >
+                              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                          </button>
+                          <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-white font-mono font-bold">
+                              Run {currentResultIndex + 1} / {allSimResults.length}
+                          </div>
+                          <button 
+                              disabled={currentResultIndex === allSimResults.length - 1}
+                              onClick={() => { setCurrentResultIndex(prev => Math.min(allSimResults.length - 1, prev + 1)); setIsPlaying(true); }}
+                              className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                          >
+                              <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </button>
+                      </div>
 
-                         <div className="flex items-center gap-1 bg-gray-800 rounded p-1 border border-gray-700 ml-4">
-                             <button onClick={() => setSimSpeed('slow')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'slow' ? 'bg-yellow-600 text-white' : 'text-gray-500 hover:text-white'}`}>Slow</button>
-                             <button onClick={() => setSimSpeed('medium')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'medium' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}>Med</button>
-                             <button onClick={() => setSimSpeed('fast')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'fast' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'}`}>Fast</button>
-                        </div>
+                       <div className="flex items-center gap-1 bg-gray-800 rounded p-1 border border-gray-700 ml-4">
+                           <button onClick={() => setSimSpeed('slow')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'slow' ? 'bg-yellow-600 text-white' : 'text-gray-500 hover:text-white'}`}>Slow</button>
+                           <button onClick={() => setSimSpeed('medium')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'medium' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}>Med</button>
+                           <button onClick={() => setSimSpeed('fast')} className={`px-3 py-1 text-xs font-bold uppercase rounded ${simSpeed === 'fast' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'}`}>Fast</button>
+                      </div>
 
-                        {/* Playback Controls for Slow/Medium */}
-                        {simSpeed !== 'fast' && (
-                            <div className="flex items-center gap-2 ml-4 border-l border-gray-700 pl-4">
-                                <button 
-                                    onClick={() => setIsPlaying(!isPlaying)}
-                                    className={`px-3 py-1 text-xs font-bold uppercase rounded border transition-colors flex items-center gap-1 ${isPlaying ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600 hover:bg-yellow-600/40' : 'bg-green-600/20 text-green-400 border-green-600 hover:bg-green-600/40'}`}
-                                >
-                                    {isPlaying ? (
-                                        <>
-                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-                                            Pause
-                                        </>
-                                    ) : (
-                                        <>
-                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                            {playbackIndex === 0 ? 'Start' : 'Resume'}
-                                        </>
-                                    )}
-                                </button>
-                                <button 
-                                    onClick={() => { setIsPlaying(false); setPlaybackIndex(0); }}
-                                    className="px-3 py-1 text-xs font-bold uppercase rounded border border-red-600 text-red-400 bg-red-600/20 hover:bg-red-600/40 transition-colors flex items-center gap-1"
-                                >
-                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
+                      {/* Playback Controls for Slow/Medium */}
+                      {simSpeed !== 'fast' && (
+                          <div className="flex items-center gap-2 ml-4 border-l border-gray-700 pl-4">
+                              <button 
+                                  onClick={() => setIsPlaying(!isPlaying)}
+                                  className={`px-3 py-1 text-xs font-bold uppercase rounded border transition-colors flex items-center gap-1 ${isPlaying ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600 hover:bg-yellow-600/40' : 'bg-green-600/20 text-green-400 border-green-600 hover:bg-green-600/40'}`}
+                              >
+                                  {isPlaying ? (
+                                      <>
+                                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+                                          Pause
+                                      </>
+                                  ) : (
+                                      <>
+                                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                          {playbackIndex === 0 ? 'Start' : 'Resume'}
+                                      </>
+                                  )}
+                              </button>
+                              <button 
+                                  onClick={() => { setIsPlaying(false); setPlaybackIndex(0); }}
+                                  className="px-3 py-1 text-xs font-bold uppercase rounded border border-red-600 text-red-400 bg-red-600/20 hover:bg-red-600/40 transition-colors flex items-center gap-1"
+                              >
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                                  Cancel
+                              </button>
+                          </div>
+                      )}
 
-                        {simSpeed === 'slow' && playbackIndex < currentSim.steps.length && (
-                             <div className="ml-4 text-xs font-bold text-yellow-400 animate-pulse border border-yellow-600 px-2 py-1 rounded bg-yellow-900/20">
-                                 PRESS SPACEBAR TO SPIN
-                             </div>
-                        )}
-                         
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                         <button onClick={() => setViewMode('builder')} className="text-gray-500 hover:text-white transition-colors flex items-center gap-2">
-                            <span className="text-xs font-bold uppercase">Back to Strategy</span>
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                </div>
+                      {simSpeed === 'slow' && playbackIndex < currentSim.steps.length && (
+                           <div className="ml-4 text-xs font-bold text-yellow-400 animate-pulse border border-yellow-600 px-2 py-1 rounded bg-yellow-900/20">
+                               PRESS SPACEBAR TO SPIN
+                           </div>
+                      )}
+                       
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                       {/* RUN SIMULATION BUTTON */}
+                       <button 
+                          onClick={() => {
+                              executeSimulationLogic();
+                              setIsPlaying(true);
+                              setPlaybackIndex(0);
+                          }}
+                          className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold uppercase text-xs shadow-lg transition-transform active:scale-95 flex items-center gap-2"
+                      >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          Run Sim
+                      </button>
+                  </div>
+              </div>
 
-                {/* LIVE SPIN TICKER (For Medium/Slow Speeds) */}
-                {simSpeed !== 'fast' && (
-                    <RecentSpinsDisplay steps={displayedSteps} />
-                )}
+              {/* LIVE SPIN TICKER (For Medium/Slow Speeds) */}
+              {simSpeed !== 'fast' && (
+                  <RecentSpinsDisplay steps={displayedSteps} />
+              )}
 
-                {/* MAIN CONTENT ROW */}
-                <div className="flex-1 flex overflow-hidden min-h-0 bg-transparent">
-                    
-                    {/* LEFT COLUMN: CHART (75%) */}
-                    <div className="flex-[3] relative border-r border-gray-800 flex flex-col bg-transparent">
-                         <div className="flex-1 min-h-0 relative p-4">
+              {/* MAIN CONTENT ROW */}
+              <div className="flex-1 flex overflow-hidden min-h-0 bg-transparent">
+                  
+                  {/* LEFT COLUMN: CHART (75%) */}
+                  <div className="flex-[3] relative border-r border-gray-800 flex flex-col bg-transparent">
+                       <div className="flex-1 min-h-0 relative p-4">
+                          {currentSim && (
                             <SimulationChart 
                                 data={displayedSteps} 
                                 startBankroll={currentSim.stats.initialBankroll} 
                                 maxSpins={currentSim.stats.totalSpins}
                             />
-                         </div>
+                          )}
+                       </div>
+                       {currentSim && displayedStats && (
                          <div className="px-6 py-2 border-t border-gray-800 bg-gray-900/50 text-xs text-gray-500 font-mono text-center">
                             Current Bankroll: <span className={`font-bold text-lg ml-2 ${displayedStats.finalBankroll >= startBankroll ? 'text-green-400' : 'text-red-400'}`}>${displayedStats.finalBankroll}</span>
                             <span className="mx-3 opacity-30">|</span>
                             Net Profit: <span className={`font-bold ml-2 ${displayedStats.finalBankroll - startBankroll >= 0 ? 'text-green-400' : 'text-red-400'}`}>${displayedStats.finalBankroll - startBankroll}</span>
                          </div>
-                    </div>
+                       )}
+                  </div>
 
-                    {/* RIGHT COLUMN: STATS & LOG (25%) */}
-                    <div className="flex-1 flex flex-col bg-gray-900/80 min-w-[300px] border-l border-gray-700">
-                        
-                        {/* STAT CARDS GRID */}
+                  {/* RIGHT COLUMN: STATS & LOG (25%) */}
+                  <div className="flex-1 flex flex-col bg-gray-900/80 min-w-[300px] border-l border-gray-700">
+                      
+                      {/* STAT CARDS GRID */}
+                      {displayedStats && (
                         <div className="p-4 grid grid-cols-2 gap-3 border-b border-gray-800 bg-gray-900 shadow-md z-10">
                             <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 flex flex-col">
                                 <span className="text-[9px] text-gray-500 uppercase font-bold mb-1">Total Spins</span>
@@ -1295,7 +1446,7 @@ function App() {
                             <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 flex flex-col">
                                 <span className="text-[9px] text-gray-500 uppercase font-bold mb-1">Max Drawdown</span>
                                 <span className="text-lg font-mono text-red-400 font-bold leading-none">
-                                    {displayedStats.maxDrawdown === 0 ? '-' : `-$${Math.abs(displayedStats.maxDrawdown)}`}
+                                    {displayedStats.maxDrawdown === 0 ? '-' : `+$${Math.abs(displayedStats.maxDrawdown)}`}
                                 </span>
                             </div>
                              <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 flex flex-col">
@@ -1313,125 +1464,123 @@ function App() {
                                 <span className="text-lg font-mono text-red-500 font-bold leading-none">{displayedStats.longestLossStreak}</span>
                             </div>
                         </div>
+                      )}
 
-                        {/* LIVE LAST RESULT DISPLAY */}
-                        <div className="p-4 bg-gray-900 border-b border-gray-800 flex items-center justify-between">
-                             <div className="text-[10px] uppercase font-bold text-gray-500">Last Result</div>
-                             {displayedSteps.length > 0 ? (
-                                <div className={`px-4 py-2 rounded-lg font-black text-2xl border-2 shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
-                                    displayedSteps[displayedSteps.length-1].result.color === 'red' ? 'bg-red-600 border-red-400 text-white' : 
-                                    displayedSteps[displayedSteps.length-1].result.color === 'black' ? 'bg-gray-800 border-gray-500 text-white' : 
-                                    'bg-green-600 border-green-400 text-white'
-                                }`}>
-                                    {displayedSteps[displayedSteps.length-1].result.number}
-                                </div>
-                             ) : (
-                                <span className="text-xs text-gray-600 italic">Waiting...</span>
-                             )}
-                        </div>
+                      {/* LIVE LAST RESULT DISPLAY */}
+                      <div className="p-4 bg-gray-900 border-b border-gray-800 flex items-center justify-between">
+                           <div className="text-[10px] uppercase font-bold text-gray-500">Last Result</div>
+                           {displayedSteps.length > 0 ? (
+                              <div className={`px-4 py-2 rounded-lg font-black text-2xl border-2 shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                                  displayedSteps[displayedSteps.length-1].result.color === 'red' ? 'bg-red-600 border-red-400 text-white' : 
+                                  displayedSteps[displayedSteps.length-1].result.color === 'black' ? 'bg-gray-800 border-gray-500 text-white' : 
+                                  'bg-green-600 border-green-400 text-white'
+                              }`}>
+                                  {displayedSteps[displayedSteps.length-1].result.number}
+                              </div>
+                           ) : (
+                              <span className="text-xs text-gray-600 italic">Waiting...</span>
+                           )}
+                      </div>
 
-                        {/* SPIN LOG */}
-                        <div className="flex-1 flex flex-col min-h-0 bg-black/40">
-                             <div className="flex justify-between items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700 text-[10px] font-bold uppercase text-gray-400">
-                                <span>Spin Log</span>
-                                {displayedSteps.length > 0 && <span>Latest: #{displayedSteps[displayedSteps.length-1].spinIndex}</span>}
-                                <button 
-                                    onClick={() => {
-                                        // This button is controlled by parent state 'isLogFullScreen' which was removed.
-                                        // Restoring local toggle logic requires re-adding state or prop drilling.
-                                        // Given the complexity, we'll keep the compact view or handle later.
-                                    }}
-                                    className="hidden" 
-                                >
-                                    Full Screen
-                                </button>
-                             </div>
-                             
-                             <div className="flex-1 overflow-y-auto font-mono text-xs p-0">
-                                 {/* Log Header */}
-                                 <div className="grid grid-cols-12 gap-2 text-gray-500 py-2 px-4 bg-gray-900 border-b border-gray-800 text-[9px] uppercase font-bold sticky top-0 z-10 shadow-sm">
-                                    <div className="col-span-1">#</div>
-                                    <div className="col-span-2">Res</div>
-                                    <div className="col-span-4 text-center">Bets</div>
-                                    <div className="col-span-3 text-right">Net</div>
-                                    <div className="col-span-2 text-right">Bank</div>
-                                </div>
-                                
-                                {displayedSteps.slice().reverse().map(step => (
-                                    <div key={step.spinIndex} className="border-b border-gray-800/30">
-                                        <div 
-                                            className={`grid grid-cols-12 gap-2 py-2 px-4 items-center hover:bg-white/5 transition-colors cursor-pointer ${expandedSpinIndex === step.spinIndex ? 'bg-white/5' : ''}`}
-                                            onClick={() => setExpandedSpinIndex(expandedSpinIndex === step.spinIndex ? null : step.spinIndex)}
-                                        >
-                                            <div className="col-span-1 text-gray-500">{step.spinIndex}</div>
-                                            <div className={`col-span-2 font-bold flex items-center gap-1.5 ${
-                                                step.result.color === 'red' ? 'text-red-500' : 
-                                                step.result.color === 'black' ? 'text-gray-400' : 'text-green-500'
-                                            }`}>
-                                                {step.result.number}
-                                            </div>
-                                            <div className="col-span-4 text-[9px] text-gray-400 truncate text-center">
-                                                {step.bets.length > 0 ? (
-                                                     <span className="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">
-                                                        {step.bets.length}
-                                                     </span>
-                                                ) : <span className="opacity-20">-</span>}
-                                            </div>
-                                            <div className="col-span-3 text-right">
-                                                <div className={`font-bold ${step.net > 0 ? 'text-green-400' : (step.net < 0 ? 'text-red-400' : 'text-gray-500')}`}>
-                                                    {step.net > 0 ? '+' : ''}{step.net}
-                                                </div>
-                                            </div>
-                                            <div className={`col-span-2 text-right font-bold ${step.bankroll >= startBankroll ? 'text-green-400' : 'text-red-400'}`}>
-                                                ${step.bankroll}
-                                            </div>
-                                        </div>
-                                        
-                                        {/* EXPANDED DETAIL VIEW */}
-                                        {expandedSpinIndex === step.spinIndex && step.outcomes && step.outcomes.length > 0 && (
-                                            <div className="bg-black/40 px-4 py-2 text-[10px] animate-fadeIn border-t border-gray-800/50 shadow-inner">
-                                                <div className="mb-2 flex justify-between text-gray-500 uppercase font-bold text-[9px] border-b border-gray-700/50 pb-1">
-                                                    <span>Target</span>
-                                                    <span>Outcome</span>
-                                                </div>
-                                                {step.outcomes.map((outcome, idx) => (
-                                                    <div key={idx} className="flex justify-between items-center py-0.5">
-                                                        <span className="text-gray-300">
-                                                            {outcome.bet.label || outcome.bet.type} <span className="text-gray-600">(${outcome.bet.amount})</span>
-                                                        </span>
-                                                        <span className={`font-bold ${outcome.won ? 'text-green-400' : 'text-red-500/60'}`}>
-                                                            {outcome.won ? `+$${outcome.payout}` : `-$${outcome.bet.amount}`}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
+                      {/* SPIN LOG */}
+                      <div className="flex-1 flex flex-col min-h-0 bg-black/40">
+                           <div className="flex justify-between items-center px-4 py-2 bg-gray-800/80 border-b border-gray-700 text-[10px] font-bold uppercase text-gray-400">
+                              <span>Spin Log</span>
+                              {displayedSteps.length > 0 && <span>Latest: #{displayedSteps[displayedSteps.length-1].spinIndex}</span>}
+                              <button 
+                                  onClick={() => {
+                                      // Toggle fullscreen if needed
+                                  }}
+                                  className="hidden" 
+                              >
+                                  Full Screen
+                              </button>
+                           </div>
+                           
+                           <div className="flex-1 overflow-y-auto font-mono text-xs p-0">
+                               {/* Log Header */}
+                               <div className="grid grid-cols-12 gap-2 text-gray-500 py-2 px-4 bg-gray-900 border-b border-gray-800 text-[9px] uppercase font-bold sticky top-0 z-10 shadow-sm">
+                                  <div className="col-span-1">#</div>
+                                  <div className="col-span-2">Res</div>
+                                  <div className="col-span-4 text-center">Bets</div>
+                                  <div className="col-span-3 text-right">Net</div>
+                                  <div className="col-span-2 text-right">Bank</div>
+                              </div>
+                              
+                              {displayedSteps.map(step => (
+                                  <div key={step.spinIndex} className="border-b border-gray-800/30">
+                                      <div 
+                                          className={`grid grid-cols-12 gap-2 py-2 px-4 items-center hover:bg-white/5 transition-colors cursor-pointer ${expandedSpinIndex === step.spinIndex ? 'bg-white/5' : ''}`}
+                                          onClick={() => setExpandedSpinIndex(expandedSpinIndex === step.spinIndex ? null : step.spinIndex)}
+                                      >
+                                          <div className="col-span-1 text-gray-500">{step.spinIndex}</div>
+                                          <div className={`col-span-2 font-bold flex items-center gap-1.5 ${
+                                              step.result.color === 'red' ? 'text-red-500' : 
+                                              step.result.color === 'black' ? 'text-gray-400' : 'text-green-500'
+                                          }`}>
+                                              {step.result.number}
+                                          </div>
+                                          <div className="col-span-4 text-[9px] text-gray-400 truncate text-center">
+                                              {step.bets.length > 0 ? (
+                                                   <span className="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">
+                                                      {step.bets.length}
+                                                   </span>
+                                              ) : <span className="opacity-20">-</span>}
+                                          </div>
+                                          <div className="col-span-3 text-right">
+                                              <div className={`font-bold ${step.net > 0 ? 'text-green-400' : (step.net < 0 ? 'text-red-400' : 'text-gray-500')}`}>
+                                                  {step.net > 0 ? '+' : ''}{step.net}
+                                              </div>
+                                          </div>
+                                          <div className={`col-span-2 text-right font-bold ${step.bankroll >= startBankroll ? 'text-green-400' : 'text-red-400'}`}>
+                                              ${step.bankroll}
+                                          </div>
+                                      </div>
+                                      
+                                      {/* EXPANDED DETAIL VIEW */}
+                                      {expandedSpinIndex === step.spinIndex && step.outcomes && step.outcomes.length > 0 && (
+                                          <div className="bg-black/40 px-4 py-2 text-[10px] animate-fadeIn border-t border-gray-800/50 shadow-inner">
+                                              <div className="mb-2 flex justify-between text-gray-500 uppercase font-bold text-[9px] border-b border-gray-700/50 pb-1">
+                                                  <span>Target</span>
+                                                  <span>Outcome</span>
+                                              </div>
+                                              {step.outcomes.map((outcome, idx) => (
+                                                  <div key={idx} className="flex justify-between items-center py-0.5">
+                                                      <span className="text-gray-300">
+                                                          {outcome.bet.label || outcome.bet.type} <span className="text-gray-600">(${outcome.bet.amount})</span>
+                                                      </span>
+                                                      <span className={`font-bold ${outcome.won ? 'text-green-400' : 'text-red-500/60'}`}>
+                                                          {outcome.won ? `+$${outcome.payout}` : `-$${outcome.bet.amount}`}
+                                                      </span>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      )}
+                                  </div>
+                              ))}
+                           </div>
+                      </div>
 
-                        {/* DOWNLOAD BUTTON */}
-                        <div className="p-4 border-t border-gray-800 bg-gray-900">
-                             <button 
-                                onClick={handleDownloadCSV}
-                                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold uppercase text-xs shadow-lg shadow-blue-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                Download CSV
-                            </button>
-                        </div>
-                    </div>
+                      {/* DOWNLOAD BUTTON */}
+                      <div className="p-4 border-t border-gray-800 bg-gray-900">
+                           <button 
+                              onClick={handleDownloadCSV}
+                              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold uppercase text-xs shadow-lg shadow-blue-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              Download CSV
+                          </button>
+                      </div>
+                  </div>
 
-                </div>
-            </div>
-        );
-      }
+              </div>
+          </div>
+      );
   }
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-black text-gray-200 font-sans select-none relative" onMouseUp={(e) => handleMouseUp(e.nativeEvent)}>
-        <BackgroundEffects />
+        <BackgroundEffects glowTrigger={planetGlowTrigger} />
         
         {/* TOP TOOLBAR (Unified Config - Always Visible) */}
         <div className="absolute top-0 left-0 right-0 z-50 h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-700 flex items-center justify-between px-6 shadow-2xl">
@@ -1442,6 +1591,18 @@ function App() {
                 </h1>
                 
                 <div className="h-8 w-[1px] bg-gray-700" />
+                
+                {/* NEW STRATEGY BUTTON (Distinct) */}
+                <button 
+                    type="button"
+                    onClick={handleNewStrategy}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-bold uppercase rounded-lg shadow-lg border border-blue-400 transition-all active:scale-95"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16M4 12h16" />
+                    </svg>
+                    New
+                </button>
 
                 <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-gray-700/50">
                     <input 
@@ -1451,9 +1612,7 @@ function App() {
                         className="bg-transparent text-white font-bold px-2 py-0.5 text-sm outline-none w-40 placeholder-gray-500"
                         placeholder="Strategy Name"
                     />
-                    <button onClick={handleNewStrategy} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="New Strategy">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                    </button>
+                    
                     <button onClick={handleSaveStrategy} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="Save Strategy">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
                     </button>
@@ -1475,7 +1634,7 @@ function App() {
                  <div className="flex items-center gap-3 bg-black/40 px-3 py-1 rounded-lg border border-gray-700/50">
                     <div className="flex flex-col">
                         <span className="text-[9px] text-gray-500 font-bold uppercase">Bankroll</span>
-                        <input type="number" value={startBankroll} onChange={e => setStartBankroll(Number(e.target.value))} className="w-16 bg-transparent text-white font-mono text-xs font-bold outline-none border-b border-gray-600 focus:border-green-500" />
+                        <input type="number" value={startBankroll} onChange={e => setStartBankroll(Number(e.target.value))} className="w-16 bg-transparent text-green-400 font-mono text-xs font-bold outline-none border-b border-gray-600 focus:border-green-500" />
                     </div>
                     <div className="w-[1px] h-6 bg-gray-700" />
                     <div className="flex flex-col">
@@ -1497,17 +1656,19 @@ function App() {
                     </div>
                  </div>
 
+                 {/* GLOBAL VIEW TOGGLE BUTTON */}
                  <button 
-                    onClick={handleGoToSimulation}
-                    disabled={!isStrategyValid}
-                    className={`px-6 py-2 font-bold rounded uppercase text-xs shadow-lg transition-transform border ${
-                        !isStrategyValid 
-                        ? 'bg-gray-700 text-gray-500 border-gray-600 cursor-not-allowed' 
-                        : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95 border-blue-400'
-                    }`}
-                    title={!isStrategyValid ? "Strategy has errors (incomplete nodes)" : (viewMode === 'simulation' ? "Rerun with current settings" : "Run Simulation")}
+                    onClick={() => {
+                        if (viewMode === 'builder') {
+                            handleGoToSimulation();
+                        } else {
+                            setViewMode('builder');
+                        }
+                    }}
+                    className="px-6 py-2 font-bold rounded uppercase text-xs shadow-lg transition-transform border bg-blue-600 hover:bg-blue-500 text-white active:scale-95 border-blue-400"
+                    title="Switch View"
                 >
-                    {viewMode === 'simulation' ? "Rerun Simulation" : "Go to Simulation"}
+                    {viewMode === 'builder' ? 'Sim Page' : 'Nodes Page'}
                 </button>
                 
                 <div className="w-[1px] h-8 bg-gray-700" />
@@ -1529,10 +1690,11 @@ function App() {
         )}
 
         {/* Main Content Area */}
-        <div className={`absolute inset-0 z-10 transition-opacity duration-500 ${isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+        <div className={`absolute inset-0 z-10 transition-all duration-300 ease-in-out transform ${isTransitioning ? 'opacity-0 scale-90 blur-md translate-y-8 pointer-events-none' : 'opacity-100 scale-100 blur-0 translate-y-0'}`}>
             {viewMode === 'builder' ? (
                 <>
                     <div 
+                        key={`builder-container-${resetKey}`} // Add key here too for safety
                         className="w-full h-full overflow-hidden cursor-crosshair relative pt-16" // Added pt-16 to offset fixed header
                         onMouseDown={handleMouseDown}
                         onWheel={handleWheel}
